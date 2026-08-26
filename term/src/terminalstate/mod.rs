@@ -5,6 +5,7 @@
 use super::*;
 use crate::color::{ColorPalette, RgbColor};
 use crate::config::{BidiMode, NewlineCanon};
+use cursor_icon::CursorIcon;
 use log::debug;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
@@ -665,7 +666,7 @@ impl TerminalState {
         self.progress.clone()
     }
 
-    pub fn get_requested_pointer_shape(&self) -> Option<PointerShape> {
+    pub fn get_requested_pointer_shape(&self) -> Option<CursorIcon> {
         self.screen.pointer_shape_stack.last().copied().flatten()
     }
 
