@@ -20,8 +20,6 @@ jobs:
     runs-on: "windows-2025"
     env:
       CARGO_INCREMENTAL: "0"
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
       RUSTUP_WINDOWS_PATH_ADD_BIN: "1"
       FORK_TAG: ${{ inputs.tag || github.ref_name }}
     outputs:
@@ -67,9 +65,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           target: "x86_64-pc-windows-msvc"
-      - name: "Compile with sccache"
-        uses: mozilla-actions/sccache-action@v0.0.9
-      # One package per cargo call, like upstream: together, the -L list overflows the Windows command line under sccache.
+      # No sccache: through a wrapper, rustc's long -L list for mux overflows the Windows
+      # command line (os error 206); plain cargo falls back to an argument file.
+      - name: "Cache cargo"
+        uses: Swatinem/rust-cache@v2
+      # One package per cargo call, like upstream.
       - name: "Build wezterm (Release mode)"
         shell: cmd
         run: |
