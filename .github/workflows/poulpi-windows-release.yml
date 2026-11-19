@@ -26,6 +26,8 @@ jobs:
       zip: ${{ steps.meta.outputs.zip }}
       upstream: ${{ steps.meta.outputs.upstream }}
       version: ${{ steps.meta.outputs.version }}
+      stable: ${{ steps.meta.outputs.stable }}
+      base_date: ${{ steps.meta.outputs.base_date }}
     steps:
       - name: "checkout repo"
         uses: actions/checkout@v5
@@ -157,7 +159,7 @@ jobs:
             echo
             echo "## Changes on top of upstream"
             echo
-            echo "From the unmerged upstream PR wezterm/wezterm#8092 (Kitty Pointer Shapes Protocol):"
+            echo "The commits of the unmerged upstream PR wezterm/wezterm#8092 (Kitty Pointer Shapes Protocol, by NSPC911), then Poulpi-Lab's own fixes:"
             echo
             cat fork-changes.md
             echo
