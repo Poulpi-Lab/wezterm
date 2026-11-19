@@ -69,16 +69,32 @@ jobs:
           target: "x86_64-pc-windows-msvc"
       - name: "Compile with sccache"
         uses: mozilla-actions/sccache-action@v0.0.9
-      - name: "Build (Release mode)"
+      # One package per cargo call, like upstream: together, the -L list overflows the Windows command line under sccache.
+      - name: "Build wezterm (Release mode)"
         shell: cmd
         run: |
           PATH C:\Strawberry\perl\bin;%PATH%
-          cargo build --release -p wezterm -p wezterm-gui -p wezterm-mux-server -p strip-ansi-escapes
+          cargo build --release -p wezterm
+      - name: "Build wezterm-gui (Release mode)"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo build --release -p wezterm-gui
+      - name: "Build wezterm-mux-server (Release mode)"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo build --release -p wezterm-mux-server
+      - name: "Build strip-ansi-escapes (Release mode)"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo build --release -p strip-ansi-escapes
       - name: "Test the pointer-shapes crates"
         shell: cmd
         run: |
           PATH C:\Strawberry\perl\bin;%PATH%
-          cargo test --release -p wezterm-escape-parser -p wezterm-term
+          cargo test --release -p wezterm-escape-parser && cargo test --release -p wezterm-term
       - name: "Check the reported version"
         shell: bash
         run: |
