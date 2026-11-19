@@ -1236,9 +1236,16 @@ impl TermWindow {
                     if self.last_ui_item.is_none() && self.current_highlight.is_none() {
                         if let Some(pane) = self.get_active_pane_or_overlay() {
                             if pane.pane_id() == pane_id {
+                                // Same fallback as the mouse-move path in
+                                // mouseevent.rs: an application that grabbed
+                                // the mouse gets the arrow, not the I-beam.
+                                let fallback = if pane.is_mouse_grabbed() {
+                                    CursorIcon::Default
+                                } else {
+                                    CursorIcon::Text
+                                };
                                 window.set_cursor(Some(
-                                    pane.get_requested_pointer_shape()
-                                        .unwrap_or(CursorIcon::Text),
+                                    pane.get_requested_pointer_shape().unwrap_or(fallback),
                                 ));
                             }
                         }
