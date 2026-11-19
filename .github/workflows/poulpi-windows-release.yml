@@ -1,0 +1,136 @@
+# Poulpi-Lab fork: Windows x86_64 portable zip for a `pointer-shapes-v<upstream-date>-<sha8>` tag.
+# Based on upstream's gen_windows_tag.yml, trimmed to the portable zip.
+name: poulpi_windows_release
+
+on:
+  push:
+    tags:
+      - "pointer-shapes-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing pointer-shapes-v* tag to (re)build and publish"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: "windows-2025"
+    env:
+      CARGO_INCREMENTAL: "0"
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      RUSTUP_WINDOWS_PATH_ADD_BIN: "1"
+      FORK_TAG: ${{ inputs.tag || github.ref_name }}
+    outputs:
+      zip: ${{ steps.meta.outputs.zip }}
+      upstream: ${{ steps.meta.outputs.upstream }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: "checkout repo"
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.FORK_TAG }}
+          fetch-depth: 0
+          submodules: "recursive"
+      - name: "Upstream base and version"
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch -q https://github.com/wezterm/wezterm.git main:refs/remotes/upstream/main
+          base=$(git merge-base HEAD upstream/main)
+          version=$(git -c core.abbrev=8 show -s --format=%cd-%h --date=format:%Y%m%d-%H%M%S "$base")
+          expected="pointer-shapes-v$(git show -s --format=%cd --date=format:%Y%m%d "$base")-$(git rev-parse --short=8 "$base")"
+          if [ "$FORK_TAG" != "$expected" ]; then
+            echo "::error::tag $FORK_TAG does not match the upstream base, expected $expected"
+            exit 1
+          fi
+          # wezterm-version reads .tag: the binary reports upstream's version string.
+          echo "$version" > .tag
+          zipdir="WezTerm-windows-$FORK_TAG"
+          {
+            echo "upstream=$base"
+            echo "version=$version"
+            echo "zip=$zipdir.zip"
+            echo "zipdir=$zipdir"
+          } >> "$GITHUB_OUTPUT"
+      - name: "Install Rust"
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: "x86_64-pc-windows-msvc"
+      - name: "Compile with sccache"
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: "Build (Release mode)"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo build --release -p wezterm -p wezterm-gui -p wezterm-mux-server -p strip-ansi-escapes
+      - name: "Test the pointer-shapes crates"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo test --release -p wezterm-escape-parser -p wezterm-term
+      - name: "Check the reported version"
+        shell: bash
+        run: |
+          out=$(target/release/wezterm.exe --version)
+          echo "$out"
+          case "$out" in *"${{ steps.meta.outputs.version }}"*) ;; *) echo "::error::unexpected version"; exit 1;; esac
+      - name: "Package (same layout as upstream's portable zip)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipdir="${{ steps.meta.outputs.zipdir }}"
+          mkdir "$zipdir"
+          cp target/release/wezterm.exe \
+            target/release/wezterm-mux-server.exe \
+            target/release/wezterm-gui.exe \
+            target/release/strip-ansi-escapes.exe \
+            target/release/wezterm.pdb \
+            assets/windows/conhost/conpty.dll \
+            assets/windows/conhost/OpenConsole.exe \
+            assets/windows/angle/libEGL.dll \
+            assets/windows/angle/libGLESv2.dll \
+            "$zipdir"
+          mkdir "$zipdir/mesa"
+          cp target/release/mesa/opengl32.dll "$zipdir/mesa"
+          7z a -tzip "$zipdir.zip" "$zipdir"
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v7
+        with:
+          name: "windows"
+          path: ${{ steps.meta.outputs.zip }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.repository == 'Poulpi-Lab/wezterm'
+    env:
+      FORK_TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: "Download artifact"
+        uses: actions/download-artifact@v8
+        with:
+          name: "windows"
+      - name: "Checksum"
+        run: sha256sum "${{ needs.build.outputs.zip }}" > "${{ needs.build.outputs.zip }}.sha256"
+      - name: "Publish the release"
+        run: |
+          set -euo pipefail
+          up="${{ needs.build.outputs.upstream }}"
+          notes="WezTerm for Windows x86_64 with mouse pointer shapes (OSC 22, kitty pointer-shapes protocol).
+
+          - Upstream base: wezterm/wezterm@${up} (\`wezterm --version\` reports ${{ needs.build.outputs.version }})
+          - Carries the unmerged upstream PR wezterm/wezterm#8092
+          - Portable zip, same layout as upstream's WezTerm-windows-*.zip
+
+          Unofficial build by Poulpi-Lab, see POULPI-LAB.md."
+          if gh release view "$FORK_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload --clobber "$FORK_TAG" -R "$GITHUB_REPOSITORY" *.zip *.sha256
+          else
+            gh release create "$FORK_TAG" -R "$GITHUB_REPOSITORY" --title "$FORK_TAG" --notes "$notes" *.zip *.sha256
+          fi

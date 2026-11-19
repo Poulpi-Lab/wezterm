@@ -1,0 +1,22 @@
+# Poulpi-Lab fork: weekly / on-demand check that pointer-shapes still rebases cleanly on upstream main.
+# Reports only; the actual sync is `scripts/sync-upstream.sh --push`, run by a maintainer.
+name: poulpi_sync_check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: pointer-shapes
+          fetch-depth: 0
+      - name: "Try the rebase"
+        run: |
+          git config user.name "sync-check"
+          git config user.email "sync-check@invalid"
+          bash scripts/sync-upstream.sh 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
