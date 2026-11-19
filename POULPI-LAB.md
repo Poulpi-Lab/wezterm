@@ -19,12 +19,13 @@ Once #8092 is merged upstream, this fork has no reason to exist and will be arch
 
 ## Releases
 
-A tag `pointer-shapes-v<upstream-date>-<upstream-sha8>` (for example `pointer-shapes-v20261114-e1eae81a`,
-the date and short hash of the upstream commit the branch is based on) runs
-`.github/workflows/poulpi-windows-release.yml`. It builds the Windows x86_64 portable zip, with the
-same layout as upstream's `WezTerm-windows-*.zip`, and publishes a GitHub release with the zip and
-its `.sha256`. `wezterm --version` reports upstream's version string for that base commit; the tag
-carries the fork's identity. Binary names are upstream's (`wezterm.exe`, `wezterm-gui.exe`, ...).
+Releases have their own number, so they never look like an upstream version: tags
+`pointer-shapes-r1`, `pointer-shapes-r2`, ... A tag runs `.github/workflows/poulpi-windows-release.yml`,
+which builds the Windows x86_64 portable zip (same layout as upstream's `WezTerm-windows-*.zip`) and
+publishes a GitHub release with the zip and its `.sha256`. The release notes give the upstream
+version it corresponds to (the upstream commit and date, and the latest upstream stable release
+before it) and list the changes this fork adds on top. `wezterm --version` reports upstream's
+version string for that base commit. Binary names are upstream's (`wezterm.exe`, `wezterm-gui.exe`, ...).
 
 Upstream's own workflows are disabled in this fork's Actions settings so they do not run here.
 
@@ -36,5 +37,5 @@ scripts/sync-upstream.sh --push   # then push main (fast-forward only) and the r
 ```
 
 The script never forces `main` and stops on a conflict instead of resolving it. The
-`poulpi_sync_check` workflow runs the check weekly and on demand. After a sync, tag the new base with
-the name the script prints and push the tag to publish a release.
+`poulpi_sync_check` workflow runs the check weekly and on demand. After a sync, push the next
+`pointer-shapes-r<N>` tag the script prints to publish a release.

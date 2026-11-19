@@ -47,8 +47,9 @@ else
   echo "rebased pointer-shapes: $(git rev-parse --short=8 "$old_base") -> $(git rev-parse --short=8 "$new_base")"
 fi
 
-base_date=$(git show -s --format=%cd --date=format:%Y%m%d "$new_base")
-echo "next release tag: pointer-shapes-v${base_date}-$(git rev-parse --short=8 "$new_base")"
+last=$(git ls-remote --tags origin 'pointer-shapes-r*' | sed -n 's#.*refs/tags/pointer-shapes-r\([0-9]*\)$#\1#p' | sort -n | tail -1)
+echo "upstream base: $(git rev-parse --short=8 "$new_base") ($(git show -s --format=%cs "$new_base"))"
+echo "next release tag: pointer-shapes-r$(( ${last:-0} + 1 ))"
 
 if [ "$push" = 1 ]; then
   git push origin "upstream/main:refs/heads/main"   # fast-forward only, never forced

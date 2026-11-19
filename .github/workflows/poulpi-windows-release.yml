@@ -1,15 +1,15 @@
-# Poulpi-Lab fork: Windows x86_64 portable zip for a `pointer-shapes-v<upstream-date>-<sha8>` tag.
+# Poulpi-Lab fork: Windows x86_64 portable zip for a `pointer-shapes-r<N>` tag (the fork's own release number).
 # Based on upstream's gen_windows_tag.yml, trimmed to the portable zip.
 name: poulpi_windows_release
 
 on:
   push:
     tags:
-      - "pointer-shapes-v*"
+      - "pointer-shapes-r*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing pointer-shapes-v* tag to (re)build and publish"
+        description: "Existing pointer-shapes-r* tag to (re)build and publish"
         required: true
 
 permissions:
@@ -43,11 +43,15 @@ jobs:
           git fetch -q https://github.com/wezterm/wezterm.git main:refs/remotes/upstream/main
           base=$(git merge-base HEAD upstream/main)
           version=$(git -c core.abbrev=8 show -s --format=%cd-%h --date=format:%Y%m%d-%H%M%S "$base")
-          expected="pointer-shapes-v$(git show -s --format=%cd --date=format:%Y%m%d "$base")-$(git rev-parse --short=8 "$base")"
-          if [ "$FORK_TAG" != "$expected" ]; then
-            echo "::error::tag $FORK_TAG does not match the upstream base, expected $expected"
-            exit 1
-          fi
+          case "$FORK_TAG" in
+            pointer-shapes-r[0-9]*) ;;
+            *) echo "::error::tag $FORK_TAG is not pointer-shapes-r<N>"; exit 1;;
+          esac
+          git fetch -q --tags https://github.com/wezterm/wezterm.git 'refs/tags/20*:refs/tags/20*' || true
+          stable=$(git describe --tags --abbrev=0 --match '20*' "$base" 2>/dev/null || echo unknown)
+          # The changes this fork adds: every commit after the upstream base, minus the fork's own tooling.
+          git log --reverse --format='- %s (%an, %h)' "$base"..HEAD -- . \
+            ':!POULPI-LAB.md' ':!scripts/sync-upstream.sh' ':!.github/workflows/poulpi-*' > fork-changes.md
           # wezterm-version reads .tag: the binary reports upstream's version string.
           echo "$version" > .tag
           zipdir="WezTerm-windows-$FORK_TAG"
@@ -56,6 +60,8 @@ jobs:
             echo "version=$version"
             echo "zip=$zipdir.zip"
             echo "zipdir=$zipdir"
+            echo "stable=$stable"
+            echo "base_date=$(git show -s --format=%cs "$base")"
           } >> "$GITHUB_OUTPUT"
       - name: "Install Rust"
         uses: dtolnay/rust-toolchain@stable
@@ -102,7 +108,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: "windows"
-          path: ${{ steps.meta.outputs.zip }}
+          path: |
+            ${{ steps.meta.outputs.zip }}
+            fork-changes.md
 
   release:
     runs-on: ubuntu-latest
@@ -122,15 +130,25 @@ jobs:
         run: |
           set -euo pipefail
           up="${{ needs.build.outputs.upstream }}"
-          notes="WezTerm for Windows x86_64 with mouse pointer shapes (OSC 22, kitty pointer-shapes protocol).
-
-          - Upstream base: wezterm/wezterm@${up} (\`wezterm --version\` reports ${{ needs.build.outputs.version }})
-          - Carries the unmerged upstream PR wezterm/wezterm#8092
-          - Portable zip, same layout as upstream's WezTerm-windows-*.zip
-
-          Unofficial build by Poulpi-Lab, see POULPI-LAB.md."
+          {
+            echo "WezTerm for Windows x86_64 with mouse pointer shapes (OSC 22, kitty pointer-shapes protocol): hand, I-beam and resize cursors."
+            echo
+            echo "## Corresponding upstream version"
+            echo
+            echo "- Upstream \`main\` of ${{ needs.build.outputs.base_date }}, commit wezterm/wezterm@${up} (upstream nightly line)."
+            echo "- \`wezterm --version\` reports upstream's version string: \`${{ needs.build.outputs.version }}\`."
+            echo "- Latest upstream stable release before this base: \`${{ needs.build.outputs.stable }}\`."
+            echo
+            echo "## Changes on top of upstream"
+            echo
+            echo "From the unmerged upstream PR wezterm/wezterm#8092 (Kitty Pointer Shapes Protocol):"
+            echo
+            cat fork-changes.md
+            echo
+            echo "Portable zip, same layout as upstream's \`WezTerm-windows-*.zip\`. Unofficial build by Poulpi-Lab, see POULPI-LAB.md."
+          } > notes.md
           if gh release view "$FORK_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload --clobber "$FORK_TAG" -R "$GITHUB_REPOSITORY" *.zip *.sha256
           else
-            gh release create "$FORK_TAG" -R "$GITHUB_REPOSITORY" --title "$FORK_TAG" --notes "$notes" *.zip *.sha256
+            gh release create "$FORK_TAG" -R "$GITHUB_REPOSITORY" --title "$FORK_TAG" --notes-file notes.md *.zip *.sha256
           fi
